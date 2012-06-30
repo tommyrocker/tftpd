@@ -30,6 +30,8 @@ public:
 	enum {OP_RRQ=1, OP_WRQ, OP_DAT,OP_ACK,OP_ERR};
 	enum {ERR_UNKNOWN, ERR_NOFILE, ERR_ACCESSIL, ERR_DISKFULL, ERR_ILFTP, ERR_UNKNOWNTID, ERR_FILEEXIST, ERR_NOUSER};
 	enum {EM_IDLE, EM_RUNNING};
+	static vector <CFile*> file_list;
+	static CRITICAL_SECTION cs_files;
 public:
 	int recvmsgproc(const char *pbuf, const int len);
 	int rrqMsgProc(const char * pbuf, const int len);
@@ -41,6 +43,9 @@ public:
 	int sendErrorMsg(short int errcode);
 
 	BOOL running( ){return state == EM_RUNNING;};
+
+	static CFile * addFileToList(string fname);
+	static int delFileFromList(string fname);
 
 	CTftp();
 	virtual ~CTftp();

@@ -14,27 +14,6 @@ using  namespace std;
 vector <CTftp *> g_tftpproc;
 CRITICAL_SECTION g_cs;
 
-bool matchTftpClient(sockaddr_in peer)
-{
-	bool ret = FALSE;
-	EnterCriticalSection(&g_cs);
-
-	unsigned int i;
-	for(i=0; i<g_tftpproc.size(); i++)
-	{
-		CTftp * p = g_tftpproc.at(i);
-		sockaddr_in sin = p->pcsock->getPeer();
-		if(!memcmp(&sin, &peer, sizeof(sockaddr_in)))
-		{
-			ret = TRUE;
-			break;
-		}
-	}
-
-	LeaveCriticalSection(&g_cs);
-
-	return ret;
-}
 
 void addTftpProcToVector(CTftp *p)
 {

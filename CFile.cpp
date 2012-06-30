@@ -12,6 +12,7 @@ CFile::CFile()
 	fp = NULL;
 	strlist.clear();
 	lenlist.clear();
+	refer = 0;
 }
 
 BOOL CFile::open(string mode)
@@ -52,6 +53,7 @@ CFile::CFile(string s)
 	name = s;
 	strlist.clear();
 	lenlist.clear();
+	refer = 0;
 }
 
 string CFile::getName() const
@@ -118,6 +120,14 @@ void CFile::write(const char *buf, const int len)
 	}
 }
 
+int CFile::put()
+{
+	if(refer > 0)
+		refer--;
+
+	return refer;
+}
+
 CFile::~CFile()
 {
 	if(!strlist.empty())
@@ -133,7 +143,8 @@ CFile::~CFile()
 		lenlist.clear();
 	}
 
-	close();
+	if(refer == 0)
+		close();
 
 
 }

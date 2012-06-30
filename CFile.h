@@ -20,6 +20,7 @@ class CFile
 {
 private:
 	string name;
+	int refer;
 public:
 	FILE * fp;
 	vector <char *> strlist;
@@ -32,6 +33,8 @@ public:
 	void read();
 	void write(const char *buf, const int len);
 	void display();
+	void get(){refer++;};
+	int put();
 
 	CFile();
 	CFile( string s);

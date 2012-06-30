@@ -7,9 +7,37 @@
 
 #include "CTftp.h"
 
-bool matchTftpClient(sockaddr_in peer);
 void addTftpProcToVector(CTftp *p);
 void delTftpProcFromVector(CTftp *pd);
+
+CRITICAL_SECTION CTftp::cs_files;
+vector <CFile*> CTftp::file_list;
+
+extern vector <CTftp *> g_tftpproc;
+extern CRITICAL_SECTION g_cs;
+
+bool matchTftpClient(sockaddr_in peer)
+{
+	bool ret = FALSE;
+	EnterCriticalSection(&g_cs);
+
+	unsigned int i;
+	for(i=0; i<g_tftpproc.size(); i++)
+	{
+		CTftp * p = g_tftpproc.at(i);
+		sockaddr_in sin = p->pcsock->getPeer();
+		if(!memcmp(&sin, &peer, sizeof(sockaddr_in)))
+		{
+			ret = TRUE;
+			break;
+		}
+	}
+
+	LeaveCriticalSection(&g_cs);
+
+	return ret;
+}
+
 
 CTftp::CTftp()
 {
@@ -283,6 +311,55 @@ int CTftp::dataMsgProc(const char *pbuf, const int len)
 	}
 
 	return ret;
+}
+
+CFile * CTftp::addFileToList(string fname)
+{
+	CFile *pf = NULL;
+	EnterCriticalSection(&CTftp::cs_files);
+	int n = CTftp::file_list.size();
+	int i = 0;
+	for(i=0; i<n; i++)
+	{
+		pf = (CFile*)CTftp::file_list.at(i);
+		if(pf->getName() == fname)
+			break;
+	}
+
+	if(i >= n)
+	{
+		pf = new CFile(fname);
+		if(pf->open("r"))
+		{
+			pf->read();
+			CTftp::file_list.push_back(pf);
+		}
+	}
+
+	if(pf)
+		pf->get();
+
+	LeaveCriticalSection(&CTftp::cs_files);
+
+	return pf;
+}
+
+int CTftp::delFileFromList(string fname)
+{
+	EnterCriticalSection(&CTftp::cs_files);
+
+	vector <CFile*>::iterator iter;
+
+	for(iter = CTftp::file_list.begin(); iter != CTftp::file_list.end(); iter++)
+	{
+		if((*iter)->getName() == fname)
+		{
+			CTftp::file_list.erase(iter);
+		}
+	}
+	LeaveCriticalSection(&CTftp::cs_files);
+
+	return 0;
 }
 
 CTftp::~CTftp()

@@ -83,6 +83,7 @@ int CTftp::rrqMsgProc(const char *pbuf, const int len)
 
 	CTftp * ptftp= new CTftp();
 
+#if 0
 	if(ptftp)
 	{
 		char *p = (char *)pbuf;
@@ -121,6 +122,29 @@ int CTftp::rrqMsgProc(const char *pbuf, const int len)
 		else
 			delete ptftp;
 	}
+#else
+	char *p = (char *)pbuf;
+	int flen = strlen(p);
+	string s,m;
+	s.assign(p, flen);
+	p += flen+1;
+	m.assign(p, strlen(p));
+
+	if(ptftp->init(pcsock, s, m, TFTP_FILE_MODE_READ) == TRUE && ptftp->start())
+	{
+		addTftpProcToVector(ptftp);
+
+		DWORD dwThread = 0;
+		CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)workThread, ptftp, 0, &dwThread);
+
+		ret = TFTP_OK;
+	}
+	else
+	{
+		delete ptftp;
+		ret = TFTP_ERR;
+	}
+#endif
 
 	return ret;
 
@@ -231,6 +255,7 @@ int CTftp::wrqMsgProc(const char *pbuf, const int len)
 
 	CTftp * ptftp= new CTftp();
 
+#if 0
 	if(ptftp)
 	{
 		char *p = (char *)pbuf;
@@ -243,7 +268,7 @@ int CTftp::wrqMsgProc(const char *pbuf, const int len)
 		if(ptftp->pcfile && ptftp->pcfile->open("w"))
 		{
 			ptftp->blockno = 0;
-			ptftp->direct =  "pet";
+			ptftp->direct =  "put";
 
 			CSock * lsock = new CSock();
 			if(lsock)
@@ -270,6 +295,32 @@ int CTftp::wrqMsgProc(const char *pbuf, const int len)
 		else
 			delete ptftp;
 	}
+#else
+	if(ptftp)
+	{
+		char *p = (char *)pbuf;
+		int flen = strlen(p);
+		string s,m;
+		s.assign(p, flen);
+		p += flen+1;
+		m.assign(p, strlen(p));
+
+		if(ptftp->init(pcsock, s, m, TFTP_FILE_MODE_WRITE) == TRUE && ptftp->start())
+		{
+			addTftpProcToVector(ptftp);
+
+			DWORD dwThread = 0;
+			CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)workThread, ptftp, 0, &dwThread);
+
+			ret = TFTP_OK;
+		}
+		else
+		{
+			delete ptftp;
+			ret = TFTP_ERR;
+		}
+	}
+#endif
 
 	return ret;
 
@@ -303,40 +354,62 @@ int CTftp::dataMsgProc(const char *pbuf, const int len)
 		else if(rbno < blockno)
 		{
 			sendAckMsg(blockno);
-			delete p;
 			ret = TFTP_OK;
 		}
-		else
-			delete p;
+
+		delete p;
 	}
 
 	return ret;
 }
 
-CFile * CTftp::addFileToList(string fname)
+CFile * CTftp::addFileToList(string fname, string reqmode, int mode)
 {
 	CFile *pf = NULL;
 	EnterCriticalSection(&CTftp::cs_files);
 	int n = CTftp::file_list.size();
 	int i = 0;
-	for(i=0; i<n; i++)
+	for (i = 0; i < n; i++)
 	{
-		pf = (CFile*)CTftp::file_list.at(i);
-		if(pf->getName() == fname)
+		pf = (CFile*) CTftp::file_list.at(i);
+		if (pf->getName() == fname)
 			break;
 	}
 
-	if(i >= n)
+	if (i >= n)
 	{
-		pf = new CFile(fname);
-		if(pf->open("r"))
+		string openstr;
+
+		if(mode == TFTP_FILE_MODE_WRITE)
 		{
-			pf->read();
-			CTftp::file_list.push_back(pf);
+			openstr = (reqmode == MODASCII)?"wt":"wb";
+		}
+		else
+			openstr = (reqmode == MODASCII)?"r":"rb";
+		pf = new CFile(fname);
+		if (pf)
+		{
+			if (pf->open(openstr))
+			{
+				if (mode == TFTP_FILE_MODE_READ)
+					pf->read();
+
+				CTftp::file_list.push_back(pf);
+			}
+			else
+			{
+				delete pf;
+				pf = NULL;
+			}
 		}
 	}
+	else
+	{
+		if(mode == TFTP_FILE_MODE_WRITE)
+			pf = NULL;
+	}
 
-	if(pf)
+	if (pf)
 		pf->get();
 
 	LeaveCriticalSection(&CTftp::cs_files);
@@ -355,6 +428,7 @@ int CTftp::delFileFromList(string fname)
 		if((*iter)->getName() == fname)
 		{
 			CTftp::file_list.erase(iter);
+			break;
 		}
 	}
 	LeaveCriticalSection(&CTftp::cs_files);
@@ -362,10 +436,77 @@ int CTftp::delFileFromList(string fname)
 	return 0;
 }
 
+BOOL CTftp::init(CSock * dsock, const string fname, const string  reqmode, const int imode)
+{
+	BOOL ret = FALSE;
+
+	filename = fname;
+	mode = reqmode;
+
+	if(dsock != NULL)
+	{
+		CSock * lsock = new CSock();
+		if (lsock)
+		{
+			lsock->setPeer(dsock->getPeer());
+
+			pcsock = lsock;
+
+			direct = (imode == TFTP_FILE_MODE_WRITE) ? "put" : "get";
+
+			pcfile = CTftp::addFileToList(fname, reqmode, imode);
+
+			if (pcfile)
+				ret = TRUE;
+		}
+	}
+
+	return ret;
+}
+
+BOOL CTftp::start()
+{
+	BOOL ret = FALSE;
+	int rsend = 0;
+	if(pcfile->isWrite())
+	{
+		blockno = 0;
+		rsend =sendAckMsg(blockno);
+	}
+	else
+	{
+		blockno = 1;
+		rsend = sendDataMsg(blockno);
+	}
+
+	if(rsend == TFTP_OK)
+	{
+		ret = TRUE;
+		state = EM_RUNNING;
+	}
+
+	return ret;
+
+}
+
+void CTftp::init_global_var()
+{
+	InitializeCriticalSection(&CTftp::cs_files);
+	CTftp::file_list.clear();
+}
+
 CTftp::~CTftp()
 {
 	if(pcfile)
-		delete pcfile;
+	{
+		EnterCriticalSection(&CTftp::cs_files);
+		if(pcfile->put() == 0)
+		{
+			CTftp::delFileFromList(pcfile->getName());
+			delete pcfile;
+		}
+		LeaveCriticalSection(&CTftp::cs_files);
+	}
 
 	if(pcsock)
 		delete pcsock;

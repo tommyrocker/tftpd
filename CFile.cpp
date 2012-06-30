@@ -128,13 +128,26 @@ int CFile::put()
 	return refer;
 }
 
+BOOL CFile::isWrite()
+{
+	if(fp && (fp->_flag == _IOWRT || fp->_flag == _IORW))
+		return TRUE;
+	else
+		return FALSE;
+}
+
 CFile::~CFile()
 {
+
 	if(!strlist.empty())
 	{
 		unsigned int  i;
 		for(i=0; i<strlist.size(); i++)
-			delete(strlist.at(i));
+		{
+			char * p = strlist.at(i);
+			delete p;
+//			delete(strlist.at(i));
+		}
 		strlist.clear();
 	}
 
@@ -143,9 +156,7 @@ CFile::~CFile()
 		lenlist.clear();
 	}
 
-	if(refer == 0)
-		close();
-
+	close();
 
 }
 

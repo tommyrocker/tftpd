@@ -42,10 +42,14 @@ public:
 	int sendAckMsg(short int blockno);
 	int sendErrorMsg(short int errcode);
 
+	BOOL init(CSock *dsock, const string fname, const string reqmode, const int mode);
+	BOOL start();
+
 	BOOL running( ){return state == EM_RUNNING;};
 
-	static CFile * addFileToList(string fname);
+	static CFile * addFileToList(string fname, string reqmode, int mode);
 	static int delFileFromList(string fname);
+	static void init_global_var();
 
 	CTftp();
 	virtual ~CTftp();

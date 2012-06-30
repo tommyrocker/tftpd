@@ -16,6 +16,11 @@
 
 using namespace std;
 
+enum{
+	TFTP_FILE_MODE_READ,
+	TFTP_FILE_MODE_WRITE
+};
+
 class CFile
 {
 private:
@@ -35,6 +40,7 @@ public:
 	void display();
 	void get(){refer++;};
 	int put();
+	BOOL isWrite();
 
 	CFile();
 	CFile( string s);

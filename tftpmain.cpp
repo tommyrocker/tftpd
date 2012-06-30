@@ -48,6 +48,8 @@ int main(int argc, char **argv)
 
 	InitializeCriticalSection(&g_cs);
 
+	CTftp::init_global_var();
+
 	CTftp ltftp;
 	ltftp.pcsock = new CSock(69);
 
